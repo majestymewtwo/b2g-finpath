@@ -1,119 +1,192 @@
-import { useState, useRef, useEffect } from "react";
-import { motion } from "framer-motion";
-import { Send, Bot, User, Sparkles } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Mic, Check, RotateCcw } from "lucide-react";
 import BottomNav from "@/components/BottomNav";
 
-interface Message {
-  id: number;
-  role: "user" | "ai";
-  text: string;
-}
-
-const quickPrompts = ["Investment Tips", "Market Trends", "Budget Plan", "Debt Strategy"];
-
-const initialMessages: Message[] = [
-  { id: 1, role: "ai", text: "Hi! I'm your AI Financial Advisor. How can I help you today? 🎯" },
-];
+const SpeechRecognition =
+  (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
 
 const AIAdvisor = () => {
-  const [messages, setMessages] = useState<Message[]>(initialMessages);
-  const [input, setInput] = useState("");
-  const bottomRef = useRef<HTMLDivElement>(null);
+  const [isListening, setIsListening] = useState(false);
+  const [hasStopped, setHasStopped] = useState(false);
+  const [transcript, setTranscript] = useState("");
+  const [aiResponse, setAiResponse] = useState("");
+  const [isGenerating, setIsGenerating] = useState(false);
+  const recognitionRef = useRef<any>(null);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+    if (!SpeechRecognition) return;
 
-  const send = (text: string) => {
-    if (!text.trim()) return;
-    const userMsg: Message = { id: Date.now(), role: "user", text };
-    const aiMsg: Message = {
-      id: Date.now() + 1,
-      role: "ai",
-      text: `Great question about "${text}"! Based on current market conditions, I'd recommend diversifying your portfolio with a mix of index funds and bonds. Would you like me to break this down further?`,
+    const recognition = new SpeechRecognition();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = "en-US";
+
+    recognition.onstart = () => {
+      setIsListening(true);
+      setHasStopped(false);
     };
-    setMessages((m) => [...m, userMsg, aiMsg]);
-    setInput("");
+
+    recognition.onresult = (event: any) => {
+      let liveText = "";
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        liveText += event.results[i][0].transcript;
+      }
+      setTranscript(liveText);
+    };
+
+    recognition.onend = () => {
+      setIsListening(false);
+      setHasStopped(true);
+    };
+
+    recognitionRef.current = recognition;
+  }, []);
+
+  const startRecording = () => {
+    if (!recognitionRef.current) return;
+    setTranscript("");
+    setAiResponse("");
+    setHasStopped(false);
+    recognitionRef.current.start();
+  };
+
+  const stopRecording = () => {
+    recognitionRef.current?.stop();
+  };
+
+  const generateInsight = async () => {
+    if (!transcript.trim()) return;
+
+    setIsGenerating(true);
+    setAiResponse("");
+
+    try {
+      const response = await fetch("http://localhost:5000/generate", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ message: transcript }),
+      });
+
+      const data = await response.json();
+
+      streamText(data.reply);
+    } catch (error) {
+      console.error("Error generating insight");
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  // 🔥 ChatGPT-like word streaming
+  const streamText = (text: string) => {
+    const words = text.split(" ");
+    let index = 0;
+
+    const interval = setInterval(() => {
+      setAiResponse((prev) => prev + words[index] + " ");
+      index++;
+
+      if (index >= words.length) {
+        clearInterval(interval);
+        speakResponse(text); // Speak after full text generated
+      }
+    }, 80); // speed
+  };
+
+  const speakResponse = (text: string) => {
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = "en-US";
+    speechSynthesis.speak(utterance);
+  };
+
+  const retake = () => {
+    setTranscript("");
+    setAiResponse("");
+    setHasStopped(false);
+    startRecording();
   };
 
   return (
     <div className="min-h-screen bg-background flex flex-col pb-20">
+      
       {/* Header */}
       <div className="px-6 pt-14 pb-4 border-b border-border">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 gradient-primary rounded-xl flex items-center justify-center">
-            <Sparkles className="w-5 h-5 text-primary-foreground" />
-          </div>
-          <div>
-            <h1 className="font-bold text-foreground">AI Advisor</h1>
-            <p className="text-xs text-primary font-medium">Online</p>
-          </div>
-        </div>
+        <h1 className="font-bold text-foreground text-lg">
+          Voice Financial Advisor
+        </h1>
+        <p className="text-xs text-primary font-medium">
+          {isListening
+            ? "Listening..."
+            : hasStopped
+            ? "Review your speech"
+            : "Tap mic to start"}
+        </p>
       </div>
 
-      {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
-        {messages.map((msg) => (
-          <motion.div
-            key={msg.id}
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            className={`flex gap-2 ${msg.role === "user" ? "justify-end" : ""}`}
+      {/* Content */}
+      <div className="flex-1 px-6 py-6 space-y-6 overflow-y-auto">
+
+        {/* User Speech */}
+        {transcript && (
+          <div className="w-full bg-muted/50 border border-border rounded-2xl p-5 text-foreground text-sm leading-relaxed">
+            {transcript}
+          </div>
+        )}
+
+        {/* AI Response */}
+        {aiResponse && (
+          <div className="w-full bg-primary/10 border border-primary/20 rounded-2xl p-5 text-foreground text-sm leading-relaxed transition-all duration-300">
+            {aiResponse}
+          </div>
+        )}
+
+        {isGenerating && (
+          <div className="text-xs text-muted-foreground animate-pulse">
+            Generating insight...
+          </div>
+        )}
+      </div>
+
+      {/* Buttons */}
+      <div className="px-6 pb-6 flex justify-center gap-4">
+
+        {!isListening && !hasStopped && (
+          <button
+            onClick={startRecording}
+            className="w-16 h-16 rounded-2xl flex items-center justify-center gradient-primary text-primary-foreground transition-all duration-300"
           >
-            {msg.role === "ai" && (
-              <div className="w-7 h-7 gradient-primary rounded-lg flex items-center justify-center flex-shrink-0 mt-1">
-                <Bot className="w-3.5 h-3.5 text-primary-foreground" />
-              </div>
-            )}
-            <div
-              className={`max-w-[80%] px-4 py-3 rounded-2xl text-sm leading-relaxed ${
-                msg.role === "user"
-                  ? "gradient-primary text-primary-foreground rounded-br-md"
-                  : "bg-muted text-foreground rounded-bl-md"
-              }`}
+            <Mic className="w-6 h-6" />
+          </button>
+        )}
+
+        {isListening && (
+          <button
+            onClick={stopRecording}
+            className="w-16 h-16 rounded-2xl flex items-center justify-center bg-red-500 text-white animate-pulse transition-all duration-300"
+          >
+            <Mic className="w-6 h-6" />
+          </button>
+        )}
+
+        {!isListening && hasStopped && (
+          <>
+            <button
+              onClick={generateInsight}
+              className="w-16 h-16 rounded-2xl flex items-center justify-center bg-green-500 text-white transition-all duration-300"
             >
-              {msg.text}
-            </div>
-            {msg.role === "user" && (
-              <div className="w-7 h-7 bg-muted rounded-lg flex items-center justify-center flex-shrink-0 mt-1">
-                <User className="w-3.5 h-3.5 text-muted-foreground" />
-              </div>
-            )}
-          </motion.div>
-        ))}
-        <div ref={bottomRef} />
-      </div>
+              <Check className="w-6 h-6" />
+            </button>
 
-      {/* Quick Prompts */}
-      <div className="px-6 pb-2 flex gap-2 overflow-x-auto">
-        {quickPrompts.map((p) => (
-          <button
-            key={p}
-            onClick={() => send(p)}
-            className="flex-shrink-0 px-3 py-1.5 bg-accent text-accent-foreground text-xs font-medium rounded-full hover:bg-primary/10 hover:text-primary transition-colors"
-          >
-            {p}
-          </button>
-        ))}
-      </div>
-
-      {/* Input */}
-      <div className="px-6 pb-4">
-        <div className="flex gap-2">
-          <input
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && send(input)}
-            placeholder="Ask me anything..."
-            className="flex-1 h-12 px-4 bg-muted/50 border border-border rounded-xl text-foreground placeholder:text-muted-foreground text-sm focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-primary transition-all"
-          />
-          <button
-            onClick={() => send(input)}
-            className="w-12 h-12 gradient-primary rounded-xl flex items-center justify-center hover:opacity-90 transition-opacity"
-          >
-            <Send className="w-5 h-5 text-primary-foreground" />
-          </button>
-        </div>
+            <button
+              onClick={retake}
+              className="w-16 h-16 rounded-2xl flex items-center justify-center bg-yellow-500 text-white transition-all duration-300"
+            >
+              <RotateCcw className="w-6 h-6" />
+            </button>
+          </>
+        )}
       </div>
 
       <BottomNav />
