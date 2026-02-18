@@ -11,6 +11,8 @@ const AIAdvisor = () => {
   const [transcript, setTranscript] = useState("");
   const [aiResponse, setAiResponse] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
+  const [currentWordIndex, setCurrentWordIndex] = useState<number | null>(null);
+
   const recognitionRef = useRef<any>(null);
 
   useEffect(() => {
@@ -42,6 +44,7 @@ const AIAdvisor = () => {
     recognitionRef.current = recognition;
   }, []);
 
+
   const startRecording = () => {
     if (!recognitionRef.current) return;
     setTranscript("");
@@ -54,11 +57,21 @@ const AIAdvisor = () => {
     recognitionRef.current?.stop();
   };
 
+  const retake = () => {
+    setTranscript("");
+    setAiResponse("");
+    setHasStopped(false);
+    setCurrentWordIndex(null);
+    startRecording();
+  };
+
+
   const generateInsight = async () => {
     if (!transcript.trim()) return;
 
     setIsGenerating(true);
     setAiResponse("");
+    setCurrentWordIndex(null);
 
     try {
       const response = await fetch("http://localhost:5000/generate", {
@@ -71,7 +84,9 @@ const AIAdvisor = () => {
 
       const data = await response.json();
 
-      streamText(data.reply);
+      setAiResponse(data.reply);
+      speakResponse(data.reply);
+
     } catch (error) {
       console.error("Error generating insight");
     } finally {
@@ -79,38 +94,43 @@ const AIAdvisor = () => {
     }
   };
 
-  // 🔥 ChatGPT-like word streaming
-  const streamText = (text: string) => {
-    const words = text.split(" ");
-    let index = 0;
-
-    const interval = setInterval(() => {
-      setAiResponse((prev) => prev + words[index] + " ");
-      index++;
-
-      if (index >= words.length) {
-        clearInterval(interval);
-        speakResponse(text); // Speak after full text generated
-      }
-    }, 80); // speed
-  };
 
   const speakResponse = (text: string) => {
+    if (!("speechSynthesis" in window)) return;
+
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = "en-US";
+    utterance.rate = 1;
+
+    const words = text.split(" ");
+
+    utterance.onboundary = (event: any) => {
+      if (event.name === "word") {
+        const charIndex = event.charIndex;
+
+        let runningLength = 0;
+        for (let i = 0; i < words.length; i++) {
+          runningLength += words[i].length + 1;
+          if (runningLength > charIndex) {
+            setCurrentWordIndex(i);
+            break;
+          }
+        }
+      }
+    };
+
+    utterance.onend = () => {
+      setCurrentWordIndex(null);
+    };
+
+    speechSynthesis.cancel(); // stop previous speech if any
     speechSynthesis.speak(utterance);
   };
 
-  const retake = () => {
-    setTranscript("");
-    setAiResponse("");
-    setHasStopped(false);
-    startRecording();
-  };
 
   return (
     <div className="min-h-screen bg-background flex flex-col pb-20">
-      
+
       {/* Header */}
       <div className="px-6 pt-14 pb-4 border-b border-border">
         <h1 className="font-bold text-foreground text-lg">
@@ -137,11 +157,23 @@ const AIAdvisor = () => {
 
         {/* AI Response */}
         {aiResponse && (
-          <div className="w-full bg-primary/10 border border-primary/20 rounded-2xl p-5 text-foreground text-sm leading-relaxed transition-all duration-300">
-            {aiResponse}
+          <div className="w-full bg-primary/10 border border-primary/20 rounded-2xl p-5 text-foreground text-sm leading-relaxed">
+            {aiResponse.split(" ").map((word, index) => (
+              <span
+                key={index}
+                className={`transition-all duration-150 ${
+                  index === currentWordIndex
+                    ? "bg-primary text-primary-foreground px-1 rounded"
+                    : ""
+                }`}
+              >
+                {word + " "}
+              </span>
+            ))}
           </div>
         )}
 
+        {/* Loading Indicator */}
         {isGenerating && (
           <div className="text-xs text-muted-foreground animate-pulse">
             Generating insight...
@@ -152,6 +184,7 @@ const AIAdvisor = () => {
       {/* Buttons */}
       <div className="px-6 pb-6 flex justify-center gap-4">
 
+        {/* Start Recording */}
         {!isListening && !hasStopped && (
           <button
             onClick={startRecording}
@@ -161,6 +194,7 @@ const AIAdvisor = () => {
           </button>
         )}
 
+        {/* Stop Recording */}
         {isListening && (
           <button
             onClick={stopRecording}
@@ -170,6 +204,7 @@ const AIAdvisor = () => {
           </button>
         )}
 
+        {/* Accept + Retake */}
         {!isListening && hasStopped && (
           <>
             <button

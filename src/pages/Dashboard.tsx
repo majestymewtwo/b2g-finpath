@@ -22,7 +22,7 @@ const Dashboard = () => {
         <div className="flex items-center justify-between mb-6">
           <div>
             <p className="text-sm text-muted-foreground">Good morning</p>
-            <h1 className="text-2xl font-bold text-foreground">Alex 👋</h1>
+            <h1 className="text-2xl font-bold text-foreground">Muthu 👋</h1>
           </div>
           <button className="w-10 h-10 bg-card border border-border rounded-xl flex items-center justify-center relative">
             <Bell className="w-5 h-5 text-foreground" />
