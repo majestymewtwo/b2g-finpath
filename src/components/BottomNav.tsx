@@ -1,5 +1,5 @@
 import { useLocation, useNavigate } from "react-router-dom";
-import { Home, Users, Wallet, Gift, BookOpen, MessageSquare } from "lucide-react";
+import { Home, Users, Wallet, Gift, BookOpen, MessageSquare, LogOut } from "lucide-react";
 
 const navItems = [
   { path: "/dashboard", icon: Home, label: "Home" },
@@ -8,6 +8,7 @@ const navItems = [
   { path: "/rewards", icon: Gift, label: "Rewards" },
   { path: "/advisor", icon: MessageSquare, label: "AI" },
   { path: "/learning", icon: BookOpen, label: "Learn" },
+  { path: "/", icon: LogOut, label: "LogOut" },
 ];
 
 const BottomNav = () => {

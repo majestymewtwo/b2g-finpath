@@ -27,7 +27,7 @@ const Auth = () => {
           <div className="w-14 h-14 gradient-primary rounded-2xl mx-auto mb-4 flex items-center justify-center">
             <span className="text-primary-foreground font-bold text-xl">F</span>
           </div>
-          <h1 className="text-2xl font-bold text-foreground">FinCommunity</h1>
+          <h1 className="text-2xl font-bold text-foreground">FinPath Collective</h1>
           <p className="text-muted-foreground text-sm mt-1">
             Your financial community awaits
           </p>
